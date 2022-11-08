@@ -47,11 +47,18 @@ class NeuralNet(nn.Module):
         """
         super(NeuralNet, self).__init__()
         self.loss_fn = loss_fn
-        # Where do we set the lrate?
-        
-        # Initalize network architecture -> use linear / sequential objects
+        h = 128 # Between 1 and 256
+
+        # Manually defined layers?
+        self.conv1 = nn.Conv2d(3, 6, 5)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.conv2 = nn.Conv2d(6, 16, 5)
+        self.fc1 = nn.Linear(16 * 5 * 5, 120)
+        self.fc2 = nn.Linear(120, 84)
+        self.fc3 = nn.Linear(84, 10)
+    
         # Initialize optimizer
-        # self.optimizer = optim.SGD(model.paramaters(), lr=lrate, momentum=.9)
+        self.optimizer = optim.SGD(self.net.parameters(), lr=lrate, momentum=0.9)
 
     
 
@@ -61,9 +68,17 @@ class NeuralNet(nn.Module):
         @param x: an (N, in_size) Tensor
         @return y: an (N, out_size) Tensor of output from the network
         """
-        # Call sequential object
-        raise NotImplementedError("You need to write this part!")
-        return torch.ones(x.shape[0], 1)
+        # TODO Call sequential object?
+
+        x = self.pool(F.sigmoid(self.conv1(x)))
+        x = self.pool(F.sigmoid(self.conv2(x)))
+        x = torch.flatten(x, 1) # flatten all dimensions except batch
+        x = F.sigmoid(self.fc1(x))
+        x = F.sigmoid(self.fc2(x))
+        x = self.fc3(x)
+        
+        return x
+        # return torch.ones(x.shape[0], 1)
 
     def step(self, x,y):
         """
@@ -73,9 +88,12 @@ class NeuralNet(nn.Module):
         @param y: an (N,) Tensor
         @return L: total empirical risk (mean of losses) for this batch as a float (scalar)
         """
+
         # Use optimizer object
             # call zero_grad() on the optimizer to clear the gradient's buffer
-        raise NotImplementedError("You need to write this part!")
+
+
+        
         return 0.0
 
 
@@ -101,6 +119,28 @@ def fit(train_set,train_labels,dev_set,epochs,batch_size=100):
     @return net: a NeuralNet object
     """
     # Construct a neural net object and iteratively call step() to train the network
+    lrate = .01
+    # create 
+    num_classification_categories = 4
+    # TODO check input size
+    model = NeuralNet(lrate, nn.CrossEntropyLoss(), len(train_labels), num_classification_categories)
     
-    raise NotImplementedError("You need to write this part!")
-    return [],[],None
+    # Create DataLoader
+    params = { 'batch_size':batch_size, 
+            'shuffle':False, 
+            'num_workers':6 }
+    training_set = get_dataset_from_arrays(train_set, train_labels)
+    training_generator = torch.utils.data.DataLoader(training_set, **params)
+    
+    # Loop through epochs to train model
+    losses = []
+    for epoch in range(epochs):
+        running_loss = 0.0
+        for i, data in enumerate(training_generator):
+            inputs, labels = data['features'], data['labels']
+            model.step(inputs, labels)
+
+    # Attempt to classify development set
+    estimated_labels = np.array()
+    
+    return losses, estimated_labels, net
