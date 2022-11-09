@@ -49,17 +49,16 @@ class NeuralNet(nn.Module):
         self.loss_fn = loss_fn
         h = 128 # Between 1 and 256
 
-        # Based on code from "https://pytorch.org/tutorials/beginner/basics/buildmodel_tutorial.html" 
-        # and "https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html"
+        # Based on description from "https://towardsdatascience.com/pytorch-layer-dimensions-what-sizes-should-they-be-and-why-4265a41e01fd"
         self.flatten = nn.Flatten()
-        self.linear_sigmoid_stack = nn.Sequential(
-            nn.Linear(in_size, 512),
+        self.model = nn.Sequential(
+            nn.Linear(in_size, h),
             nn.Sigmoid(),
-            nn.Linear(512, out_size)
+            nn.Linear(h, out_size)
         )
     
         # Initialize optimizer
-        self.optimizer = optim.SGD(self.linear_sigmoid_stack.parameters(), lr=lrate, momentum=0.9)
+        self.optimizer = optim.SGD(self.model.parameters(), lr=lrate, momentum=0.9)
 
     
 
@@ -71,9 +70,9 @@ class NeuralNet(nn.Module):
         """
         
         x = self.flatten(x)
-        logits = self.linear_sigmoid_stack(x)
+        logits = self.model(x)
         return logits
-        
+
         # return torch.ones(x.shape[0], 1)
 
 
@@ -88,13 +87,12 @@ class NeuralNet(nn.Module):
         """
 
         self.optimizer.zero_grad()
-        output = self.linear_sigmoid_stack(x)
+        output = self.model(x)
         loss = self.loss_fn(output, y)
         loss.backward()
         self.optimizer.step()
         
         return loss.item()
-
 
 
 def fit(train_set,train_labels,dev_set,epochs,batch_size=100):
@@ -120,13 +118,19 @@ def fit(train_set,train_labels,dev_set,epochs,batch_size=100):
 
     lrate = .01
     num_classification_categories = 4
-    train_set = F.normalize(train_set, 2, 1) # Centralize input data
-    model = NeuralNet(lrate, nn.CrossEntropyLoss(), len(train_labels), num_classification_categories)
+    # TODO Standardize across both train and dev tensors
+    train_set = F.normalize(train_set, 2, 1)
+    dev_set = F.normalize(dev_set, 2, 1)
+    model = NeuralNet(lrate, nn.CrossEntropyLoss(), 3 * 31 * 31, num_classification_categories)
     
     # Create DataLoader
-    params = { 'batch_size' : batch_size, 'shuffle' : False, 'num_workers' : 6 }
+    params = { 'batch_size' : batch_size, 'shuffle' : False, 'num_workers' : 4 }
     training_set = get_dataset_from_arrays(train_set, train_labels)
     training_generator = DataLoader(training_set, **params)
+
+    dev_labels = torch.zeros(750)
+    development_set = get_dataset_from_arrays(dev_set, dev_labels)
+    development_generator = DataLoader(development_set, **params)
     
     # Loop through epochs to train model
     losses = []
@@ -136,7 +140,13 @@ def fit(train_set,train_labels,dev_set,epochs,batch_size=100):
             inputs, labels = data['features'], data['labels']
             losses.append(model.step(inputs, labels))
 
-    # TODO Attempt to classify development set
-    estimated_labels = np.array() 
+    # Attempt to classify development set
+    estimated_labels = np.zeros(750)
+    for i, data in enumerate(development_generator):
+        inputs = data['features']
+        logits = model(inputs)
+        pred_probab = nn.Softmax(dim=1)(logits)
+        yhat = pred_probab.argmax(1)
+        estimated_labels[i] = yhat
     
     return losses, estimated_labels, model
