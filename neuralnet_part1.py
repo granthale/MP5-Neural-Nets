@@ -49,16 +49,17 @@ class NeuralNet(nn.Module):
         self.loss_fn = loss_fn
         h = 128 # Between 1 and 256
 
-        # Manually defined layers?
-        self.conv1 = nn.Conv2d(3, 6, 5)
-        self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-        self.fc1 = nn.Linear(16 * 5 * 5, 120)
-        self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 10)
+        # Based on code from "https://pytorch.org/tutorials/beginner/basics/buildmodel_tutorial.html" 
+        # and "https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html"
+        self.flatten = nn.Flatten()
+        self.linear_sigmoid_stack = nn.Sequential(
+            nn.Linear(in_size, 512),
+            nn.Sigmoid(),
+            nn.Linear(512, out_size)
+        )
     
         # Initialize optimizer
-        self.optimizer = optim.SGD(self.net.parameters(), lr=lrate, momentum=0.9)
+        self.optimizer = optim.SGD(self.linear_sigmoid_stack.parameters(), lr=lrate, momentum=0.9)
 
     
 
@@ -68,17 +69,14 @@ class NeuralNet(nn.Module):
         @param x: an (N, in_size) Tensor
         @return y: an (N, out_size) Tensor of output from the network
         """
-        # TODO Call sequential object?
-
-        x = self.pool(F.sigmoid(self.conv1(x)))
-        x = self.pool(F.sigmoid(self.conv2(x)))
-        x = torch.flatten(x, 1) # flatten all dimensions except batch
-        x = F.sigmoid(self.fc1(x))
-        x = F.sigmoid(self.fc2(x))
-        x = self.fc3(x)
         
-        return x
+        x = self.flatten(x)
+        logits = self.linear_sigmoid_stack(x)
+        return logits
+        
         # return torch.ones(x.shape[0], 1)
+
+
 
     def step(self, x,y):
         """
@@ -89,12 +87,13 @@ class NeuralNet(nn.Module):
         @return L: total empirical risk (mean of losses) for this batch as a float (scalar)
         """
 
-        # Use optimizer object
-            # call zero_grad() on the optimizer to clear the gradient's buffer
-
-
+        self.optimizer.zero_grad()
+        output = self.linear_sigmoid_stack(x)
+        loss = self.loss_fn(output, y)
+        loss.backward()
+        self.optimizer.step()
         
-        return 0.0
+        return loss.item()
 
 
 
@@ -118,19 +117,16 @@ def fit(train_set,train_labels,dev_set,epochs,batch_size=100):
     @return yhats: an (M,) NumPy array of binary labels for dev_set
     @return net: a NeuralNet object
     """
-    # Construct a neural net object and iteratively call step() to train the network
+
     lrate = .01
-    # create 
     num_classification_categories = 4
-    # TODO check input size
+    train_set = F.normalize(train_set, 2, 1) # Centralize input data
     model = NeuralNet(lrate, nn.CrossEntropyLoss(), len(train_labels), num_classification_categories)
     
     # Create DataLoader
-    params = { 'batch_size':batch_size, 
-            'shuffle':False, 
-            'num_workers':6 }
+    params = { 'batch_size' : batch_size, 'shuffle' : False, 'num_workers' : 6 }
     training_set = get_dataset_from_arrays(train_set, train_labels)
-    training_generator = torch.utils.data.DataLoader(training_set, **params)
+    training_generator = DataLoader(training_set, **params)
     
     # Loop through epochs to train model
     losses = []
@@ -138,9 +134,9 @@ def fit(train_set,train_labels,dev_set,epochs,batch_size=100):
         running_loss = 0.0
         for i, data in enumerate(training_generator):
             inputs, labels = data['features'], data['labels']
-            model.step(inputs, labels)
+            losses.append(model.step(inputs, labels))
 
-    # Attempt to classify development set
-    estimated_labels = np.array()
+    # TODO Attempt to classify development set
+    estimated_labels = np.array() 
     
-    return losses, estimated_labels, net
+    return losses, estimated_labels, model
