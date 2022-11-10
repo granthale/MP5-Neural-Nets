@@ -39,14 +39,18 @@ class NeuralNet(nn.Module):
         """
         super(NeuralNet, self).__init__()
         self.loss_fn = loss_fn
-        self.model = nn.Sequential(nn.Linear(in_size, 56), 
-        nn.ReLU(),
-        nn.Linear(56,128),
-        nn.ReLU(), 
-        nn.Linear(128, out_size))
+        self.conv1 = nn.Conv2d(3, 6, 5)
+        self.pool = nn.MaxPool2d(2, 2)
+        self.conv2 = nn.Conv2d(6, 16, 5)
+        
+        self.fc1 = nn.Linear(256, 120) # Why 256?
+        self.fc2 = nn.Linear(120, 84)
+        self.fc3 = nn.Linear(84, 84)
+        self.fc5 = nn.Linear(84, 4)
 
          # Initialize optimizer
-        self.optimizer = optim.SGD(self.parameters(), lr=lrate, momentum=0.9)
+        self.optimizer = optim.SGD(self.parameters(), lr=lrate, momentum=0.9, weight_decay=1e-3)
+        # TODO Drop out? Batch normalization?
 
         
     def forward(self, x):
@@ -55,9 +59,16 @@ class NeuralNet(nn.Module):
         @param x: an (N, in_size) Tensor
         @return y: an (N, out_size) Tensor of output from the network
         """
+        x = x.view(x.shape[0], 3, 31, 31)
+        x = self.pool(F.leaky_relu(self.conv1(x)))
+        x = self.pool(F.leaky_relu(self.conv2(x)))
         x = torch.flatten(x, 1) # flatten all dimensions except batch
-        logits = self.model(x)
-        return logits
+        x = F.leaky_relu(self.fc1(x))
+        x = F.leaky_relu(self.fc2(x))
+        x = F.leaky_relu(self.fc3(x))
+        x = self.fc4(x)
+
+        return x
 
     def step(self, x,y):
         """
