@@ -39,7 +39,15 @@ class NeuralNet(nn.Module):
         """
         super(NeuralNet, self).__init__()
         self.loss_fn = loss_fn
-        raise NotImplementedError("You need to write this part!")
+        self.model = nn.Sequential(nn.Linear(in_size, 56), 
+        nn.ReLU(),
+        nn.Linear(56,128),
+        nn.ReLU(), 
+        nn.Linear(128, out_size))
+
+         # Initialize optimizer
+        self.optimizer = optim.SGD(self.parameters(), lr=lrate, momentum=0.9)
+
         
     def forward(self, x):
         """Performs a forward pass through your neural net (evaluates f(x)).
@@ -47,8 +55,9 @@ class NeuralNet(nn.Module):
         @param x: an (N, in_size) Tensor
         @return y: an (N, out_size) Tensor of output from the network
         """
-        raise NotImplementedError("You need to write this part!")
-        return torch.ones(x.shape[0], 1)
+        x = torch.flatten(x, 1) # flatten all dimensions except batch
+        logits = self.model(x)
+        return logits
 
     def step(self, x,y):
         """
@@ -58,8 +67,12 @@ class NeuralNet(nn.Module):
         @param y: an (N,) Tensor
         @return L: total empirical risk (mean of losses) for this batch as a float (scalar)
         """
-        raise NotImplementedError("You need to write this part!")
-        return 0.0
+        self.optimizer.zero_grad()
+        output = self(x)
+        loss = self.loss_fn(output, y)
+        loss.backward()
+        self.optimizer.step()
+        return loss.item()
 
 def fit(train_set,train_labels,dev_set,epochs,batch_size=100):
     """ Make NeuralNet object 'net' and use net.step() to train a neural net
@@ -81,5 +94,30 @@ def fit(train_set,train_labels,dev_set,epochs,batch_size=100):
     @return yhats: an (M,) NumPy array of binary labels for dev_set
     @return net: a NeuralNet object
     """
-    raise NotImplementedError("You need to write this part!")
-    return [],[],None
+    lrate = .01
+    model = NeuralNet(lrate, nn.CrossEntropyLoss(), 3*31*31, 4)
+    
+    # Standardize across both train and dev tensors
+    train_set = (train_set - torch.mean(train_set)) / torch.std(train_set)
+    dev_set = (dev_set - torch.mean(dev_set)) / torch.std(dev_set)
+    
+    # Create DataLoader
+    params = { 'batch_size' : batch_size, 'shuffle' : False, 'num_workers' : 4 }
+    training_set = get_dataset_from_arrays(train_set, train_labels)
+    training_generator = DataLoader(training_set, **params)
+    
+    # Loop through epochs to train model
+    losses = []
+    for i in range(epochs):
+        running_loss = 0.0
+        for data in training_generator:
+            inputs, labels = data['features'], data['labels']
+            running_loss += model.step(inputs, labels)
+
+        losses.append(running_loss)
+
+    predicted = model(dev_set)
+    predicted = predicted.detach().numpy()
+    predicted = predicted.argmax(1)
+    
+    return losses, predicted, model
