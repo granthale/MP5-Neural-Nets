@@ -47,18 +47,14 @@ class NeuralNet(nn.Module):
         """
         super(NeuralNet, self).__init__()
         self.loss_fn = loss_fn
-        h = 128 # Between 1 and 256
-
-        # Based on description from "https://towardsdatascience.com/pytorch-layer-dimensions-what-sizes-should-they-be-and-why-4265a41e01fd"
-        self.flatten = nn.Flatten()
-        self.model = nn.Sequential(
-            nn.Linear(in_size, h),
-            nn.Sigmoid(),
-            nn.Linear(h, out_size)
-        )
+        self.model = nn.Sequential(nn.Linear(in_size, 56), 
+        nn.ReLU(),
+        nn.Linear(56,128),
+        nn.ReLU(), 
+        nn.Linear(128, out_size))
     
         # Initialize optimizer
-        self.optimizer = optim.SGD(self.model.parameters(), lr=lrate, momentum=0.9)
+        self.optimizer = optim.SGD(self.parameters(), lr=lrate, momentum=0.9)
 
     
 
@@ -68,13 +64,9 @@ class NeuralNet(nn.Module):
         @param x: an (N, in_size) Tensor
         @return y: an (N, out_size) Tensor of output from the network
         """
-        
-        x = self.flatten(x)
+        x = torch.flatten(x, 1) # flatten all dimensions except batch
         logits = self.model(x)
         return logits
-
-        # return torch.ones(x.shape[0], 1)
-
 
 
     def step(self, x,y):
@@ -85,13 +77,11 @@ class NeuralNet(nn.Module):
         @param y: an (N,) Tensor
         @return L: total empirical risk (mean of losses) for this batch as a float (scalar)
         """
-
         self.optimizer.zero_grad()
-        output = self.model(x)
+        output = self(x)
         loss = self.loss_fn(output, y)
         loss.backward()
         self.optimizer.step()
-        
         return loss.item()
 
 
@@ -115,38 +105,30 @@ def fit(train_set,train_labels,dev_set,epochs,batch_size=100):
     @return yhats: an (M,) NumPy array of binary labels for dev_set
     @return net: a NeuralNet object
     """
-
     lrate = .01
-    num_classification_categories = 4
-    # TODO Standardize across both train and dev tensors
-    train_set = F.normalize(train_set, 2, 1)
-    dev_set = F.normalize(dev_set, 2, 1)
-    model = NeuralNet(lrate, nn.CrossEntropyLoss(), 3 * 31 * 31, num_classification_categories)
+    model = NeuralNet(lrate, nn.CrossEntropyLoss(), 3*31*31, 4)
+    
+    # Standardize across both train and dev tensors
+    train_set = (train_set - torch.mean(train_set)) / torch.std(train_set)
+    dev_set = (dev_set - torch.mean(dev_set)) / torch.std(dev_set)
     
     # Create DataLoader
     params = { 'batch_size' : batch_size, 'shuffle' : False, 'num_workers' : 4 }
     training_set = get_dataset_from_arrays(train_set, train_labels)
     training_generator = DataLoader(training_set, **params)
-
-    dev_labels = torch.zeros(750)
-    development_set = get_dataset_from_arrays(dev_set, dev_labels)
-    development_generator = DataLoader(development_set, **params)
     
     # Loop through epochs to train model
     losses = []
-    for epoch in range(epochs):
+    for i in range(epochs):
         running_loss = 0.0
-        for i, data in enumerate(training_generator):
+        for data in training_generator:
             inputs, labels = data['features'], data['labels']
-            losses.append(model.step(inputs, labels))
+            running_loss += model.step(inputs, labels)
 
-    # Attempt to classify development set
-    estimated_labels = np.zeros(750)
-    for i, data in enumerate(development_generator):
-        inputs = data['features']
-        logits = model(inputs)
-        pred_probab = nn.Softmax(dim=1)(logits)
-        yhat = pred_probab.argmax(1)
-        estimated_labels[i] = yhat
+        losses.append(running_loss)
+
+    predicted = model(dev_set)
+    predicted = predicted.detach().numpy()
+    predicted = predicted.argmax(1)
     
-    return losses, estimated_labels, model
+    return losses, predicted, model
