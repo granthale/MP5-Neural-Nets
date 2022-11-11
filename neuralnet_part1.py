@@ -26,6 +26,7 @@ from torch.utils.data import DataLoader
 
 
 class NeuralNet(nn.Module):
+    # Based on code from "https://pytorch.org/tutorials/beginner/basics/buildmodel_tutorial.html"
     def __init__(self, lrate, loss_fn, in_size, out_size):
         """
         Initializes the layers of your neural network.
@@ -57,16 +58,14 @@ class NeuralNet(nn.Module):
         self.optimizer = optim.SGD(self.parameters(), lr=lrate, momentum=0.9)
 
     
-
+    
     def forward(self, x):
         """Performs a forward pass through your neural net (evaluates f(x)).
 
         @param x: an (N, in_size) Tensor
         @return y: an (N, out_size) Tensor of output from the network
         """
-        x = torch.flatten(x, 1) # flatten all dimensions except batch
-        logits = self.model(x)
-        return logits
+        return self.model(x)
 
 
     def step(self, x,y):
