@@ -25,6 +25,8 @@ from utils import get_dataset_from_arrays
 from torch.utils.data import DataLoader
 
 class NeuralNet(nn.Module):
+    # Based on code from "https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html"
+    # Conv2D explanation from "https://pytorch.org/tutorials/beginner/introyt/modelsyt_tutorial.html"
     def __init__(self, lrate, loss_fn, in_size, out_size):
         """
         Initializes the layers of your neural network.
@@ -39,20 +41,19 @@ class NeuralNet(nn.Module):
         """
         super(NeuralNet, self).__init__()
         self.loss_fn = loss_fn
-        self.conv1 = nn.Conv2d(3, 6, 5)
+        self.conv1 = nn.Conv2d(3, 6, 3)
         self.pool = nn.MaxPool2d(2, 2)
-        self.conv2 = nn.Conv2d(6, 16, 5)
-        
-        self.fc1 = nn.Linear(256, 120) # Why 256?
+        self.conv2 = nn.Conv2d(6, 16, 3)
+        self.dropout = nn.Dropout(0.25)
+        self.fc1 = nn.Linear(16 * 6 * 6, 120) 
         self.fc2 = nn.Linear(120, 84)
-        self.fc3 = nn.Linear(84, 84)
-        self.fc5 = nn.Linear(84, 4)
+        self.fc3 = nn.Linear(84, 4)
 
          # Initialize optimizer
         self.optimizer = optim.SGD(self.parameters(), lr=lrate, momentum=0.9, weight_decay=1e-3)
         # TODO Drop out? Batch normalization?
 
-        
+    # Based on code from "https://pytorch.org/tutorials/beginner/blitz/cifar10_tutorial.html"
     def forward(self, x):
         """Performs a forward pass through your neural net (evaluates f(x)).
 
@@ -65,8 +66,8 @@ class NeuralNet(nn.Module):
         x = torch.flatten(x, 1) # flatten all dimensions except batch
         x = F.leaky_relu(self.fc1(x))
         x = F.leaky_relu(self.fc2(x))
-        x = F.leaky_relu(self.fc3(x))
-        x = self.fc4(x)
+        x = self.dropout(x)
+        x = self.fc3(x)
 
         return x
 
